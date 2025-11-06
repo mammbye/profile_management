@@ -1,0 +1,145 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import json
+import uuid
+from typing import Dict, List
+import os
+
+app = FastAPI(title="Profile Management Microservice")
+
+# Data storage file
+PROFILES_FILE = "user_profiles.json"
+
+
+# Pydantic models
+class UserProfile(BaseModel):
+    username: str
+    password: str
+    email: str
+    timezone: str = "UTC"
+
+
+class UserResponse(BaseModel):
+    user_id: str
+    username: str
+    email: str
+    timezone: str
+    created_at: str
+
+
+# Helper functions for JSON storage
+def load_profiles() -> Dict[str, dict]:
+    """Load user profiles from JSON file"""
+    if os.path.exists(PROFILES_FILE):
+        with open(PROFILES_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def save_profiles(profiles: Dict[str, dict]):
+    """Save user profiles to JSON file"""
+    with open(PROFILES_FILE, 'w') as f:
+        json.dump(profiles, f, indent=2)
+
+
+def user_exists(username: str, email: str) -> bool:
+    """Check if username or email already exists"""
+    profiles = load_profiles()
+    for user_data in profiles.values():
+        if user_data['username'] == username or user_data['email'] == email:
+            return True
+    return False
+
+
+# API endpoints
+@app.post("/users/create", response_model=UserResponse)
+async def create_user(profile: UserProfile):
+    """
+    Create a new user account
+
+    BENEFITS: Secure account creation for personalized tracking experience
+    COSTS: Requires unique username and email; data stored locally
+    """
+    # Validate unique username and email
+    if user_exists(profile.username, profile.email):
+        raise HTTPException(
+            status_code=400,
+            detail="Username or email already exists"
+        )
+
+    # Validate password strength (basic check)
+    if len(profile.password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 6 characters long"
+        )
+
+    # Create new user
+    user_id = str(uuid.uuid4())
+    new_user = {
+        "user_id": user_id,
+        "username": profile.username,
+        "password": profile.password,  # In production, hash this!
+        "email": profile.email,
+        "timezone": profile.timezone,
+        "created_at": str(__import__('datetime').datetime.now())
+    }
+
+    # Save to storage
+    profiles = load_profiles()
+    profiles[user_id] = new_user
+    save_profiles(profiles)
+
+    # Return response (excluding password)
+    return UserResponse(
+        user_id=user_id,
+        username=new_user["username"],
+        email=new_user["email"],
+        timezone=new_user["timezone"],
+        created_at=new_user["created_at"]
+    )
+
+
+@app.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(user_id: str):
+    """Get user profile by ID"""
+    profiles = load_profiles()
+    if user_id not in profiles:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_data = profiles[user_id]
+    return UserResponse(
+        user_id=user_data["user_id"],
+        username=user_data["username"],
+        email=user_data["email"],
+        timezone=user_data["timezone"],
+        created_at=user_data["created_at"]
+    )
+
+
+@app.get("/users/username/{username}", response_model=UserResponse)
+async def get_user_by_username(username: str):
+    """Get user profile by username"""
+    profiles = load_profiles()
+    for user_data in profiles.values():
+        if user_data["username"] == username:
+            return UserResponse(
+                user_id=user_data["user_id"],
+                username=user_data["username"],
+                email=user_data["email"],
+                timezone=user_data["timezone"],
+                created_at=user_data["created_at"]
+            )
+    raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "profile_management"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
