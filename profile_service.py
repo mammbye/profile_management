@@ -15,13 +15,11 @@ PROFILES_FILE = "user_profiles.json"
 class UserProfile(BaseModel):
     username: str
     password: str
-    timezone: str = "UTC"
 
 
 class UserResponse(BaseModel):
     user_id: str
     username: str
-    timezone: str
     created_at: str
 
 
@@ -78,7 +76,6 @@ async def create_user(profile: UserProfile):
         "user_id": user_id,
         "username": profile.username,
         "password": profile.password,  # In production, hash this!
-        "timezone": profile.timezone,
         "created_at": str(__import__('datetime').datetime.now())
     }
 
@@ -91,7 +88,7 @@ async def create_user(profile: UserProfile):
     return UserResponse(
         user_id=user_id,
         username=new_user["username"],
-        timezone=new_user["timezone"],
+
         created_at=new_user["created_at"]
     )
 
@@ -107,7 +104,6 @@ async def get_user(user_id: str):
     return UserResponse(
         user_id=user_data["user_id"],
         username=user_data["username"],
-        timezone=user_data["timezone"],
         created_at=user_data["created_at"]
     )
 
@@ -121,7 +117,6 @@ async def get_user_by_username(username: str):
             return UserResponse(
                 user_id=user_data["user_id"],
                 username=user_data["username"],
-                timezone=user_data["timezone"],
                 created_at=user_data["created_at"]
             )
     raise HTTPException(status_code=404, detail="User not found")
