@@ -1,0 +1,14 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# individual files
+start_server.sh
+requirements.txt
+api_tests.http
+user_profiles.json

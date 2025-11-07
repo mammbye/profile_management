@@ -4,6 +4,8 @@ import json
 import uuid
 from typing import Dict, List
 import os
+import bcrypt
+from datetime import datetime
 
 app = FastAPI(title="Profile Management Microservice")
 
@@ -21,6 +23,17 @@ class UserResponse(BaseModel):
     user_id: str
     username: str
     created_at: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    message: str
+    user_id: str
+    username: str
 
 
 # Helper functions for JSON storage
@@ -45,6 +58,18 @@ def user_exists(username: str) -> bool:
         if user_data['username'] == username:
             return True
     return False
+
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 
 # API endpoints
@@ -75,8 +100,8 @@ async def create_user(profile: UserProfile):
     new_user = {
         "user_id": user_id,
         "username": profile.username,
-        "password": profile.password,  # In production, hash this!
-        "created_at": str(__import__('datetime').datetime.now())
+        "password": hash_password(profile.password),
+        "created_at": str(datetime.now())
     }
 
     # Save to storage
@@ -119,6 +144,24 @@ async def get_user_by_username(username: str):
                 username=user_data["username"],
                 created_at=user_data["created_at"]
             )
+    raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.post("/users/login", response_model=LoginResponse)
+async def login_user(credentials: LoginRequest):
+    """Authenticate a user with username and password"""
+    profiles = load_profiles()
+    for user_data in profiles.values():
+        if user_data["username"] == credentials.username:
+            if verify_password(credentials.password, user_data["password"]):
+                return LoginResponse(
+                    message="Login successful",
+                    user_id=user_data["user_id"],
+                    username=user_data["username"]
+                )
+            else:
+                raise HTTPException(status_code=401, detail="Invalid password")
+
     raise HTTPException(status_code=404, detail="User not found")
 
 
