@@ -31,3 +31,11 @@ curl -X POST http://localhost:8000/users/login \
 ```bash
 curl http://localhost:8000/users/username/john
 ```
+
+### POST Data (Delete User)
+
+```bash
+curl -X POST http://localhost:8000/users/delete \
+  -H "Content-Type: application/json" \
+  -d '{"username": "john", "user_id": "<INSERT_YOUR_USER_ID_HERE>"}'
+```
