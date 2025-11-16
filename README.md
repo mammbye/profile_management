@@ -77,3 +77,5 @@ response = requests.get(url)
 print(response.status_code)  # Expected: 200 on success
 print(response.json())  # Response data with user details
 ```
+### UML Diagram
+<img width="434" height="800" alt="image" src="https://github.com/user-attachments/assets/f3f8bc3e-d240-4e85-a456-10092d5b896a" />
