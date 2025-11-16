@@ -2,8 +2,6 @@
 
 This microservice manages user profiles for the Time Tracker project. It provides endpoints to create, authenticate, retrieve, and delete user accounts.
 
-**Base URL (development)**: `http://localhost:8000`
-
 ## API Endpoints (Communication Contract)
 
 - `GET /health`
@@ -125,51 +123,80 @@ else:
 The service returns standard JSON responses with HTTP status codes indicating success or failure. Example handling in Python:
 
 ```python
+# Basic create user response handling
 resp = requests.post("http://localhost:8000/users/create", json=payload)
 if resp.status_code == 200:
-    data = resp.json()
-    user_id = data.get("user_id")
+  data = resp.json()
+  user_id = data.get("user_id")
+  print("Created user_id:", user_id)
 else:
-    # error payload uses {'detail': '...'}
-    error = resp.json().get("detail")
-    print("Error:", error)
+  # error payload uses {'detail': '...'}
+  error = resp.json().get("detail")
+  print("Create failed:", error)
+
+
+# Login example with specific error handling
+login_resp = requests.post("http://localhost:8000/users/login", json={"username": "u", "password": "p"})
+if login_resp.status_code == 200:
+  login_data = login_resp.json()
+  print("Login OK, user_id:", login_data.get("user_id"))
+elif login_resp.status_code == 401:
+  print("Invalid password")
+elif login_resp.status_code == 404:
+  print("User not found")
+else:
+  print("Login error:", login_resp.status_code, login_resp.text)
+
+
+# Get user by username (handle 404)
+g_resp = requests.get("http://localhost:8000/users/username/newuser@example.com")
+if g_resp.status_code == 200:
+  profile = g_resp.json()
+  print("User created at:", profile.get("created_at"))
+else:
+  print("Get user failed:", g_resp.status_code, g_resp.json().get("detail"))
+
+
+# Delete user example showing check-then-delete
+username = "newuser@example.com"
+resp = requests.get(f"http://localhost:8000/users/username/{username}")
+if resp.status_code != 200:
+  print("Cannot delete - user not found")
+else:
+  user_id = resp.json().get("user_id")
+  del_resp = requests.post("http://localhost:8000/users/delete", json={"username": username, "user_id": user_id})
+  if del_resp.status_code == 200:
+    print("Deleted:", del_resp.json())
+  else:
+    print("Delete failed:", del_resp.status_code, del_resp.json().get("detail"))
+
+
+# Robust request pattern: timeouts, retries (simple), and raise_for_status
+from time import sleep
+def robust_post(url, json_payload, retries=2, timeout=5):
+  for attempt in range(1, retries + 1):
+    try:
+      r = requests.post(url, json=json_payload, timeout=timeout)
+      r.raise_for_status()  # raises on 4xx/5xx
+      return r.json()
+    except requests.exceptions.HTTPError as he:
+      # For client errors, do not retry
+      status = getattr(he.response, 'status_code', None)
+      if status and 400 <= status < 500:
+        raise
+      if attempt < retries:
+        sleep(0.5)
+        continue
+      raise
+    except requests.exceptions.RequestException:
+      if attempt < retries:
+        sleep(0.5)
+        continue
+      raise
+
+try:
+  created = robust_post("http://localhost:8000/users/create", {"username": "x", "password": "p"})
+  print("Created via robust_post:", created)
+except Exception as e:
+  print("Robust create failed:", e)
 ```
-
-## UML Sequence Diagram (simple)
-
-Mermaid (renderers that support Mermaid will display this):
-
-```mermaid
-sequenceDiagram
-    Client->>ProfileService: POST /users/create {username,password}
-    ProfileService-->>Client: 200 {user_id,username,created_at}
-    Client->>ProfileService: POST /users/login {username,password}
-    ProfileService-->>Client: 200 {message,user_id,username}
-    Client->>ProfileService: GET /users/username/{username}
-    ProfileService-->>Client: 200 {user_id,username,created_at}
-    Client->>ProfileService: POST /users/delete {username,user_id}
-    ProfileService-->>Client: 200 {message,username}
-```
-
-ASCII fallback (if Mermaid not rendered):
-
-Client -> ProfileService: POST /users/create {username,password}
-ProfileService -> Client: 200 {user_id, username, created_at}
-
-Client -> ProfileService: POST /users/login {username,password}
-ProfileService -> Client: 200 {message, user_id, username}
-
-Client -> ProfileService: GET /users/username/{username}
-ProfileService -> Client: 200 {user_id, username, created_at}
-
-Client -> ProfileService: POST /users/delete {username, user_id}
-ProfileService -> Client: 200 {message, username}
-
-## Notes and Testing
-
-- The server stores profiles in `user_profiles.json` in the same directory; tests may need to remove or reset that file to get a fresh state.
-- Passwords are hashed with `bcrypt` before storage; raw passwords are never returned by the API.
-- Endpoints validate inputs and return JSON error messages under the `detail` key on failure.
-
-If you want, I can also add a small diagram image file or a more detailed UML diagram in `docs/` and update this README to link it.
-
