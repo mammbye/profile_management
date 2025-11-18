@@ -2,18 +2,16 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import json
 import uuid
-from typing import Dict
+from typing import Dict, Optional, Tuple
 import os
 import bcrypt
 from datetime import datetime
 
 app = FastAPI(title="Profile Management Microservice")
 
-# Data storage file
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), "user_profiles.json")
 
 
-# Pydantic models
 class UserProfile(BaseModel):
     username: str
     password: str
@@ -46,7 +44,6 @@ class DeleteResponse(BaseModel):
     username: str
 
 
-# Helper functions for JSON storage
 def load_profiles() -> Dict[str, dict]:
     """Load user profiles from JSON file"""
     if os.path.exists(PROFILES_FILE):
@@ -61,13 +58,21 @@ def save_profiles(profiles: Dict[str, dict]):
         json.dump(profiles, f, indent=2)
 
 
-def user_exists(username: str) -> bool:
-    """Check if username already exists"""
+def check_username_available(username: str) -> None:
+    """Raise HTTPException if username already exists"""
     profiles = load_profiles()
     for user_data in profiles.values():
         if user_data["username"] == username:
-            return True
-    return False
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+
+def find_user_by_username(username: str) -> Optional[Tuple[str, dict]]:
+    """Find user by username. Returns (user_id, user_data) or None"""
+    profiles = load_profiles()
+    for user_id, user_data in profiles.items():
+        if user_data["username"] == username:
+            return user_id, user_data
+    return None
 
 
 def hash_password(password: str) -> str:
@@ -84,42 +89,36 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 
-# API endpoints
-@app.post("/users/create", response_model=UserResponse)
-async def create_user(profile: UserProfile):
-    """
-    Create a new user account
-
-    BENEFITS: Secure account creation for personalized tracking experience
-    COSTS: Requires unique username; data stored locally
-    """
-    # Validate unique username
-    if user_exists(profile.username):
-        raise HTTPException(status_code=400, detail="Username already exists")
-
-    # Validate password strength (basic check)
-    if len(profile.password) < 6:
-        raise HTTPException(
-            status_code=400, detail="Password must be at least 6 characters long"
-        )
-
-    # Create new user
+def save_user(profile: UserProfile) -> dict:
+    """Save user data to JSON file and return the created user data"""
+    profiles = load_profiles()
     user_id = str(uuid.uuid4())
-    new_user = {
+    profiles[user_id] = {
         "user_id": user_id,
         "username": profile.username,
         "password": hash_password(profile.password),
         "created_at": str(datetime.now()),
     }
-
-    # Save to storage
-    profiles = load_profiles()
-    profiles[user_id] = new_user
     save_profiles(profiles)
+    return profiles[user_id]
 
-    # Return response (excluding password)
+
+def validate_password(password: str) -> None:
+    """Validate a password"""
+    if len(password) < 6:
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 6 characters long"
+        )
+
+
+@app.post("/users/create", response_model=UserResponse)
+async def create_user(profile: UserProfile):
+    """Create a new user account"""
+    check_username_available(profile.username)
+    validate_password(profile.password)
+    new_user = save_user(profile)
     return UserResponse(
-        user_id=user_id,
+        user_id=new_user["user_id"],
         username=new_user["username"],
         created_at=new_user["created_at"],
     )
@@ -143,54 +142,54 @@ async def get_user(user_id: str):
 @app.get("/users/username/{username}", response_model=UserResponse)
 async def get_user_by_username(username: str):
     """Get user profile by username"""
-    profiles = load_profiles()
-    for user_data in profiles.values():
-        if user_data["username"] == username:
-            return UserResponse(
-                user_id=user_data["user_id"],
-                username=user_data["username"],
-                created_at=user_data["created_at"],
-            )
-    raise HTTPException(status_code=404, detail="User not found")
+    result = find_user_by_username(username)
+    if result is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_id, user_data = result
+    return UserResponse(
+        user_id=user_data["user_id"],
+        username=user_data["username"],
+        created_at=user_data["created_at"],
+    )
 
 
 @app.post("/users/login", response_model=LoginResponse)
 async def login_user(credentials: LoginRequest):
     """Authenticate a user with username and password"""
-    profiles = load_profiles()
-    for user_data in profiles.values():
-        if user_data["username"] == credentials.username:
-            if verify_password(credentials.password, user_data["password"]):
-                return LoginResponse(
-                    message="Login successful",
-                    user_id=user_data["user_id"],
-                    username=user_data["username"],
-                )
-            else:
-                raise HTTPException(status_code=401, detail="Invalid password")
-
-    raise HTTPException(status_code=404, detail="User not found")
+    result = find_user_by_username(credentials.username)
+    if result is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_id, user_data = result
+    if not verify_password(credentials.password, user_data["password"]):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    
+    return LoginResponse(
+        message="Login successful",
+        user_id=user_data["user_id"],
+        username=user_data["username"],
+    )
 
 
 @app.post("/users/delete", response_model=DeleteResponse)
 async def delete_user(user_info: DeleteRequest):
     """Delete a user with their username and UUID"""
     profiles = load_profiles()
-
-    if user_exists(user_info.username):
-        try:
-            del profiles[user_info.user_id]
-
-            save_profiles(profiles)
-
-            return DeleteResponse(
-                message=f"Deleted account for user {user_info.username}",
-                username=user_info.username,
-            )
-        except KeyError:
-            raise HTTPException(status_code=401, detail="Invalid user_info")
-    else:
+    
+    if user_info.user_id not in profiles:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    user_data = profiles[user_info.user_id]
+    if user_data["username"] != user_info.username:
+        raise HTTPException(status_code=401, detail="Invalid user_info")
+    
+    del profiles[user_info.user_id]
+    save_profiles(profiles)
+    
+    return DeleteResponse(
+        message=f"Deleted account for user {user_info.username}",
+        username=user_info.username,
+    )
 
 
 @app.get("/health")
