@@ -1,6 +1,6 @@
 # Profile Management Microservice
 
-This microservice manages user profiles for the Time Tracker project. It provides endpoints to create, authenticate, retrieve, and delete user accounts.
+This microservice manages user profiles. It provides endpoints to create, authenticate, retrieve, and delete user accounts.
 
 ## API Endpoints (Communication Contract)
 
