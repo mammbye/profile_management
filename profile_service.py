@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import json
 import uuid
@@ -8,6 +9,15 @@ import bcrypt
 from datetime import datetime
 
 app = FastAPI(title="Profile Management Microservice")
+
+# Add CORS middleware to handle OPTIONS requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins. In production, specify exact origins.
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],  # Allows all headers
+)
 
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), "user_profiles.json")
 
