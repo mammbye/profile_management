@@ -60,11 +60,51 @@ This microservice manages user profiles. It provides endpoints to create, authen
     - 401: `{"detail": "Invalid user_info"}` (when IDs mismatch)
     - 404: `{"detail": "User not found"}`
 
-## How to programmatically REQUEST data (examples)
+## Getting Started
 
-Examples using Python `requests` (preferred):
+### Prerequisites
+- Python 3.7 or higher
+- The microservice must be running on your local machine or network
+- Python library: `requests` (install with `pip install requests`)
 
-Create user example:
+### Starting the Service
+The service runs on **port 8000** by default. Start it using:
+```bash
+uvicorn profile_service:app --host 0.0.0.0 --port 8000
+```
+
+Or using the provided run script:
+```bash
+python run.py
+```
+
+### Connecting to the Service
+All requests are made to `http://localhost:8000` (or the appropriate host/port where the service is running).
+
+The service uses RESTful HTTP methods:
+- **POST** for creating users, logging in, and deleting accounts
+- **GET** for retrieving user information
+
+All POST requests must include `Content-Type: application/json` header and send data as JSON in the request body.
+
+## How to programmatically REQUEST data (detailed guide)
+
+### 1. Creating a New User (`POST /users/create`)
+
+**Purpose**: Register a new user account with username and password.
+
+**Connection Details**:
+- URL: `http://localhost:8000/users/create`
+- Method: POST
+- Content-Type: application/json
+
+**Required Parameters**:
+- `username` (string): Unique identifier for the user. Can be an email or any unique string.
+- `password` (string): User's password. Must be at least 6 characters long.
+
+**Optional Parameters**: None
+
+**Example Request**:
 
 ```python
 import requests
@@ -77,7 +117,22 @@ print(response.json())
 # On success: {'user_id': '...', 'username': 'newuser@example.com', 'created_at': '...'}
 ```
 
-Login example:
+### 2. Logging In (`POST /users/login`)
+
+**Purpose**: Authenticate a user and retrieve their user ID.
+
+**Connection Details**:
+- URL: `http://localhost:8000/users/login`
+- Method: POST
+- Content-Type: application/json
+
+**Required Parameters**:
+- `username` (string): The username to authenticate
+- `password` (string): The password for the account
+
+**Optional Parameters**: None
+
+**Example Request**:
 
 ```python
 import requests
@@ -90,7 +145,21 @@ print(response.json())
 # On success: {'message': 'Login successful', 'user_id': '...', 'username': '...'}
 ```
 
-Get user by username example:
+### 3. Getting User by Username (`GET /users/username/{username}`)
+
+**Purpose**: Retrieve user information using their username.
+
+**Connection Details**:
+- URL: `http://localhost:8000/users/username/{username}` (replace `{username}` with actual username)
+- Method: GET
+- Content-Type: Not required for GET requests
+
+**Required Parameters**:
+- `username` (path parameter): The username to look up (included in the URL)
+
+**Optional Parameters**: None
+
+**Example Request**:
 
 ```python
 import requests
@@ -102,7 +171,24 @@ print(response.json())
 # On success: {'user_id': '...', 'username': 'newuser@example.com', 'created_at': '...'}
 ```
 
-Delete user example (first fetch user_id via username):
+### 4. Deleting a User (`POST /users/delete`)
+
+**Purpose**: Delete a user account from the system.
+
+**Connection Details**:
+- URL: `http://localhost:8000/users/delete`
+- Method: POST
+- Content-Type: application/json
+
+**Required Parameters**:
+- `username` (string): The username of the account to delete
+- `user_id` (string): The UUID of the user (must match the username for security)
+
+**Optional Parameters**: None
+
+**Important Note**: You must first retrieve the user's `user_id` before deleting. This is a security measure to ensure only authorized deletions occur.
+
+**Example Request** (first fetch user_id via username):
 
 ```python
 import requests

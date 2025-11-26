@@ -13,7 +13,8 @@ app = FastAPI(title="Profile Management Microservice")
 # Add CORS middleware to handle OPTIONS requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins. In production, specify exact origins.
+    allow_origins=["*"],  # Allows all origins.
+    # In production, specify exact origins.
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods (GET, POST, OPTIONS, etc.)
     allow_headers=["*"],  # Allows all headers
@@ -73,7 +74,9 @@ def check_username_available(username: str) -> None:
     profiles = load_profiles()
     for user_data in profiles.values():
         if user_data["username"] == username:
-            raise HTTPException(status_code=400, detail="Username already exists")
+            raise HTTPException(
+                status_code=400, detail="Username already exists"
+            )
 
 
 def find_user_by_username(username: str) -> Optional[Tuple[str, dict]]:
@@ -117,7 +120,8 @@ def validate_password(password: str) -> None:
     """Validate a password"""
     if len(password) < 6:
         raise HTTPException(
-            status_code=400, detail="Password must be at least 6 characters long"
+            status_code=400,
+            detail="Password must be at least 6 characters long"
         )
 
 
